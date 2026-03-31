@@ -43,27 +43,30 @@ def format_value(item_name, value):
 
         if item_name == "두께":
             num = round(num * 1000)
+            return f"{int(num):,}"
 
         elif item_name in ["투습도", "흡수도", "점착력"]:
             num = round(num)
+            return f"{int(num):,}"
 
         elif item_name == "인장강도":
             num = round(num, 2)
             return f"{num:.2f}"
 
-        return f"{int(num):,}"
+        return value
 
-    except:
+    except Exception:
         return value
 
 
 def read_excel_values(uploaded_file):
     try:
         wb = load_workbook(uploaded_file, data_only=True)
-        ws = wb.active
+
+        # 첫 번째 시트 강제 읽기
+        ws = wb.worksheets[0]
 
         result = {}
-
         for item_name, cell_addr in TARGET_CELLS.items():
             raw_value = ws[cell_addr].value
             result[item_name] = format_value(item_name, raw_value)
@@ -77,7 +80,11 @@ def read_excel_values(uploaded_file):
 def make_vertical_table(results_dict):
     df = pd.DataFrame(results_dict)
 
-    lot_row = pd.DataFrame([list(results_dict.keys())], columns=df.columns, index=["LOT"])
+    lot_row = pd.DataFrame(
+        [list(results_dict.keys())],
+        columns=df.columns,
+        index=["LOT"]
+    )
     df = pd.concat([lot_row, df])
 
     df.index.name = "항목"
@@ -112,7 +119,7 @@ st.title(mode)
 st.write("여러 엑셀 파일에서 지정 셀 값을 읽어 세로형 표로 정리합니다.")
 
 uploaded_files = st.file_uploader(
-    "엑셀 파일 여러 개 업로드",
+    "엑셀 파일 여러 개 업로드 (.xlsx, .xlsm)",
     type=["xlsx", "xlsm"],
     accept_multiple_files=True,
     key=f"file_uploader_{st.session_state.uploader_key}"
@@ -128,7 +135,7 @@ if uploaded_files:
         if err:
             errors.append({"파일명": file.name, "오류내용": err})
         else:
-            # 🔥 확장자 제거 + "_" 이후 삭제
+            # 확장자 제거 + "_" 이후 전부 삭제
             lot_name = file.name.rsplit(".", 1)[0].split("_")[0]
             results[lot_name] = values
 
@@ -139,7 +146,11 @@ if uploaded_files:
         st.dataframe(df, use_container_width=True)
 
         excel_file = to_excel_download(df)
-        filename = "주간_마이티_물성.xlsx" if mode == "주간 마이티 물성" else "주간_원단_물성.xlsx"
+        filename = (
+            "주간_마이티_물성.xlsx"
+            if mode == "주간 마이티 물성"
+            else "주간_원단_물성.xlsx"
+        )
 
         st.download_button(
             label="엑셀 다운로드",
@@ -147,6 +158,15 @@ if uploaded_files:
             file_name=filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+        # LOT 목록 / 개수
+        lot_list = list(results.keys())
+        lot_string = ", ".join(lot_list)
+
+        st.markdown("---")
+        st.subheader("LOT 목록")
+        st.write(lot_string)
+        st.write(f"총 {len(lot_list)}개")
 
     if errors:
         st.subheader("오류 파일")
